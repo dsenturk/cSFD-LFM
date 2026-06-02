@@ -1,0 +1,672 @@
+---
+title: "cMV-LFM Tutorial"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Install missing packages
+list.of.packages <- c("common", "dplyr", "fda", "Matrix", "mfaces", "mgcv", 
+                      "pracma", "tidyverse")
+new.packages <- list.of.packages[!(list.of.packages %in%
+                                     installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+library(common)
+library(dplyr)
+library(fda)
+library(Matrix)
+library(mfaces)
+library(mgcv)
+library(pracma)
+library(tidyverse)
+rm(new.packages, list.of.packages)
+```
+
+
+
+
+# Introduction
+
+## Description
+
+A step-by-step implementation of cMV-LFM and associated procedures including data 
+generating process of the first simulation scenario and evaluation of model 
+parameter estimation. Details of simulation design and estimation of model parameters
+are described in 'Contrastive Latent Models for Structured Functional Data'.
+
+## Main functions implemented
+
+1. data_gen: Function that generates a pair of data sets composed of preset shared and unique variation patterns.
+2. cMV-LFM: Function that constructs and fits the proposed contrastive multivariate latent functional model.
+
+## Required files
+
+1. Simulation_dgp.R
+2. cMV-LFM_Functions.R
+
+
+# Implementation
+
+## 1. Load the required files
+
+```{r,warning=FALSE}
+setwd("C:/Users/Tim/OneDrive - UCLA IT Services/SDSI_paper/CodeReleasing/cMV-LFM/")
+source("Simulation_dgp.R")
+source("cMV-LFM_Functions.R")
+```
+
+
+
+## 2. cMV-LFM implementation
+
+```{r}
+# Containers to save the estimates of mean functions, error variances, scaling parameters,
+# latent components and score variances.
+mu_x_save = list()
+mu_y_save = list()
+s2_x_save = list()
+s2_y_save = list()
+beta.X_save = list()
+beta.Y_save = list()
+
+Psi_save = list()
+Phi_save = list()
+Gamma_save = list()
+tau_x_save = list()
+tau_y_save = list()
+
+Omega_x_save = list()
+Omega_y_save = list()
+Theta_save = list()
+Lambda_save = list()
+varsigma_x_save = list()
+varsigma_y_save = list()
+```
+
+```{R}
+for (ite in 1:5 ) {
+  print(paste0(ite, "th iteration starts here ------------------------------"))
+  # Generate the simulation data pairs
+  data_grids = data_gen(n_x = 50, n_y = 50, s2_x = .25, s2_y = .25, seed = ite)
+  X.ls = data_grids[[1]]
+  Y.ls = data_grids[[2]]
+  
+  # Fitting the proposed cMV-LFM 
+  results <- cMV_LFM(X.ls, Y.ls)
+    
+  # Save the estimates
+  mu_x_save = append(mu_x_save, list(results[[1]]))
+  mu_y_save = append(mu_y_save, list(results[[2]]))
+  s2_x_save = append(s2_x_save, list(results[[3]]))
+  s2_y_save = append(s2_y_save, list(results[[4]]))
+  beta.X_save = append(beta.X_save, list(results[[5]]))
+  beta.Y_save = append(beta.Y_save, list(results[[6]]))
+
+  Psi_save = append(Psi_save, list(results[[7]]))
+  Phi_save = append(Phi_save, list(results[[8]]))
+  Gamma_save = append(Gamma_save, list(results[[9]]))
+  tau_x_save = append(tau_x_save, list(results[[10]]))
+  tau_y_save = append(tau_y_save, list(results[[11]]))
+
+  Omega_x_save = append(Omega_x_save, list(results[[12]]))
+  Omega_y_save = append(Omega_y_save, list(results[[13]]))
+  Theta_save = append(Theta_save, list(results[[14]]))
+  Lambda_save = append(Lambda_save, list(results[[15]]))
+  varsigma_x_save = append(varsigma_x_save, list(results[[16]]))
+  varsigma_y_save = append(varsigma_y_save, list(results[[17]]))
+}
+```
+
+
+## 3. Evaluation
+
+True model parameters
+```{r, warning=FALSE}
+N = 50
+tobs = seq(0, 1, length.out = N)
+J = 12
+
+# Error variances
+s2_x = rep(.25, J)
+s2_y = rep(.25, J)
+
+# Scaling parameters
+beta.X <- c(1, 0.88, 0.84, 0.75, 0.71, 0.93, 0.81, 1.11, 0.80, 0.89, 0.90, 0.73)
+beta.Y <- c(1, 0.59, 0.63, 0.54, 0.35, 0.83, 0.73, 0.98, 0.78, 0.92, 0.69, 0.71)
+
+# Dimension of latent component spaces
+L = 1 # dimension of the subject-level shared space
+K = 1 # dimension of the subject-level unique space of the first group of data X
+R = 1 # dimension of the subject-level unique space of the second group of data Y
+V_x = 2 # dimension of the outcome-level latent space of X
+V_y = 3 # dimension of the outcome-level latent space of Y
+
+# Latent components
+## Subject-level
+Psi = eval.basis(tobs, suppressWarnings(create.fourier.basis(
+  nbasis = 3, dropind = c(1,3)))) 
+Phi = eval.basis(tobs, suppressWarnings(create.fourier.basis(
+  nbasis = 3, dropind = c(1,2))))
+Gamma = eval.basis(tobs, suppressWarnings(create.fourier.basis(
+  nbasis = 5, dropind = c(1:3,5))))
+
+## Outcome-level
+tau_x = cbind(
+  matrix(sapply(tobs, FUN = function(x) 1), ncol = 1),
+  matrix(sapply(tobs, FUN = function(x) (sqrt(3)*(2*x-1))), ncol = 1)
+) 
+tau_y = cbind(
+  matrix(sapply(tobs, FUN = function(x) 1), ncol = 1),
+  matrix(sapply(tobs, FUN = function(x) (sqrt(5)*(6*x^2-6*x+1))), ncol = 1),
+  matrix(sapply(tobs, FUN = function(x) (sqrt(7)*(20*x^3-30*x^2+12*x-1))), ncol = 1)
+) 
+
+# Score variances
+## Subject-level
+Omega_x = matrix(1)
+Omega_y = matrix(1)
+Theta = matrix(.5)
+Lambda = matrix(.5)
+
+## Outcome-level
+varsigma_x = diag(c(1, .5))
+varsigma_y = diag(c(1, .5, .25))
+```
+
+
+MSE of error variance $\sigma^2_{X,j}$, $\sigma^2_{Y,j}$:
+
+```{r}
+# X
+MSE_s2 = matrix(data = NA, nrow = length(s2_x_save), ncol = J)
+for (i in 1:length(s2_x_save)) {
+  for (j in 1:J) {
+    MSE_s2[i,j] = (s2_x[j] - s2_x_save[[i]][j])^2 / s2_x[j]^2
+  }
+}
+print(paste0("The mean MSE for the error variances {", 
+             symbol("sigma") %p% supsc("2"), "X, ", "are:"))
+print(round(colMeans(MSE_s2, na.rm = TRUE), digits = 3))
+
+# Y
+MSE_s2 = matrix(data = NA, nrow = length(s2_y_save), ncol = J)
+for (i in 1:length(s2_y_save)) {
+  for (j in 1:J) {
+    MSE_s2[i,j] = (s2_y[j] - s2_y_save[[i]][j])^2 / s2_y[j]^2
+  }
+}
+print(paste0("The mean MSE for the error variances {", 
+             symbol("sigma") %p% supsc("2"), "Y, ", "are:"))
+print(round(colMeans(MSE_s2, na.rm = TRUE), digits = 3))
+```
+
+
+MSE of outcome-specific scaling parameters $\beta^x$, $\beta^y$
+
+```{r}
+# X
+beta_MSE = matrix(data = NA, nrow = length(beta.X_save), ncol = J)
+for (i in 1:length(beta.X_save)) {
+  for (j in 1:J) {
+    beta_MSE[i,] = (beta.X - beta.X_save[[i]])^2 / (beta.X)^2
+  }
+}
+
+print("Mean MSE for the outcome-specific scaling parameters in X are:")
+print(paste(symbol("beta") %p% supsc("x"), ":", 
+            round(colMeans(as.matrix(beta_MSE, na.rm = TRUE)), digits = 3)))
+
+# Y
+beta_MSE = matrix(data = NA, nrow = length(beta.Y_save), ncol = J)
+for (i in 1:length(beta.Y_save)) {
+  for (j in 1:J) {
+    beta_MSE[i,] = (beta.Y - beta.Y_save[[i]])^2 / (beta.Y)^2
+  }
+}
+
+print("Mean MSE for the outcome-specific scaling parameters in Y are:")
+print(paste(symbol("beta") %p% supsc("y"), ":", 
+            round(colMeans(as.matrix(beta_MSE, na.rm = TRUE)), digits = 3)))
+```
+
+
+Calculate MSDE for latent component estimates and MSE for score variance estimates, and plot true and 
+estimated trajectories with (5th, 50th, 95th) MSDE values.
+
+*Subject-level*
+
+$\psi_\ell(t)$
+```{r}
+MSDE_Psi = matrix(data = NA, nrow = length(Psi_save), ncol = L)
+Psi_1_est = matrix(data = NA, nrow = length(Psi_save), ncol = N)
+Omega_x_est = matrix(data = NA, nrow = length(Psi_save), ncol = L)
+Omega_y_est = matrix(data = NA, nrow = length(Psi_save), ncol = L)
+for (i in 1:length(Psi_save)) {
+  Psi_est = Psi_save[[i]]
+  if(NCOL(Psi_est) >= L){ # skipped if estimated shared components are less than the true ones.
+    if(NCOL(Psi_est) == 1){ # L = L_est = 1, the correspondence is fixed.
+      MSDE_Psi[i,1] = min(
+        trapz(tobs, (Psi - Psi_est)^2)/trapz(tobs, Psi^2), 
+        trapz(tobs, (Psi + Psi_est)^2)/trapz(tobs, Psi^2))
+      Psi_1_est[i,] = Psi_est
+      Omega_x_est[i,1] = Omega_x_save[[i]]
+      Omega_y_est[i,1] = Omega_y_save[[i]]
+    }else{ # L_est > L = 1
+      # When surplus shared component estimates are returned, the one having the 
+      # lowest MSDE with the true component is referred to as its correspondence.
+      for (j in 1:NCOL(Psi_est)) {
+        MSDE = min(trapz(tobs, (Psi - Psi_est[,j])^2) / 
+                     trapz(tobs, Psi^2), 
+                 trapz(tobs, (Psi + Psi_est[,j])^2) / 
+                   trapz(tobs, Psi^2))
+        if(j > 1){
+          if(MSDE < MSDE_Psi[i, 1]){
+            MSDE_Psi[i, 1] = MSDE
+            Psi_1_est[i,] = Psi_est[,j]
+            Omega_x_est[i,1] = Omega_x_save[[i]][j,j]
+            Omega_y_est[i,1] = Omega_y_save[[i]][j,j]
+          }
+        }else{
+          MSDE_Psi[i, 1] = MSDE
+          Psi_1_est[i,] = Psi_est[,j]
+          Omega_x_est[i,1] = Omega_x_save[[i]][j,j]
+          Omega_y_est[i,1] = Omega_y_save[[i]][j,j]
+        }
+      }
+    }
+  }
+}
+
+print(paste0("The mean MSDE for the shared components {", symbol("psi"), 
+             "(t)} ", "are:"))
+print(round(colMeans(MSDE_Psi, na.rm = TRUE), digits = 3))
+
+
+# Plots
+## Choose the estimate with (5th, 50th, 95th) MSDE with the true latent component
+quantile_mat = matrix(nrow = L, ncol = 3) # a matrix saves the (5th, 50th, 95th) MSDE values.
+for(j.true in 1:L){
+  quantile_mat[j.true,] = sort(na.omit(MSDE_Psi)[,j.true])[
+    round(nrow(na.omit(MSDE_Psi)) * c(.05, .50, .95))] 
+}
+
+ind_mat = matrix(nrow = L, ncol = 3) # a matrix contains the indices corresponding to the selected MSDE
+for(j.true in 1:L){
+  for (j in 1:3) {
+    ind_mat[j.true,j] = which.min(abs(MSDE_Psi[,j.true] - quantile_mat[j.true,j]))
+  }
+}
+
+## plot for psi_1(t)
+psi_1_5th = Psi_1_est[ind_mat[1,1],]
+psi_1_50th = Psi_1_est[ind_mat[1,2],]
+psi_1_95th = Psi_1_est[ind_mat[1,3],]
+
+par(mar = c(5.1, 5, 4.1, 2.1))
+matplot(tobs, cbind(Psi[,1], psi_1_5th, psi_1_50th, psi_1_95th), 
+        type = "l", lwd = 3, xlab = "Time", ylab = "",  cex.lab = 1.9, 
+        cex.axis = 1.5, col=c("black", "red","black", "blue"), lty = c(1,2,3,4), 
+        mgp = c(2.5,1,0), xaxs = "i") #, ylim = c(-.25, 1.75)
+title(main = list("", cex = 2.5), adj = 0, line = 1.5)
+mtext(expression(hat(psi)[1]*(t)), side=2, line=1.9, cex=2)
+legend("bottomleft", c("true", "5th", "50th", "95th"), lty = c(1,2,3,4), 
+       col=c("black", "red", "black", "blue"), lwd = 2, cex=1.2)
+```
+
+
+$\phi_k(t)$
+```{r}
+MSDE_Phi = matrix(data = NA, nrow = length(Phi_save), ncol = K)
+Phi_1_est = matrix(data = NA, nrow = length(Phi_save), ncol = N)
+Theta_est = matrix(data = NA, nrow = length(Theta_save), ncol = K)
+for (i in 1:length(Phi_save)) {
+  Phi_est = Phi_save[[i]]
+  if(NCOL(Phi_est) >= K){
+    if(NCOL(Phi_est) == 1){ # K = K_est = 1.
+      MSDE_Phi[i,1] = min(
+        trapz(tobs, (Phi - Phi_est)^2) / trapz(tobs, Phi^2), 
+        trapz(tobs, (Phi + Phi_est)^2) / trapz(tobs, Phi^2))
+      Phi_1_est[i,] = Phi_est
+      Theta_est[i,1] = Theta_save[[i]]
+    }else{ # K_est > K = 1
+      for (j in 1:NCOL(Phi_est)) {
+        MSDE = min(trapz(tobs, (Phi - Phi_est[,j])^2) / 
+                     trapz(tobs, Phi^2), 
+                 trapz(tobs, (Phi + Phi_est[,j])^2) / 
+                   trapz(tobs, Phi^2))
+        if(j > 1){
+          if(MSDE < MSDE_Phi[i, 1]){
+            MSDE_Phi[i, 1] = MSDE
+            Phi_1_est[i,] = Phi_est[,j]
+            Theta_est[i,1] = Theta_save[[i]][j,j]
+          }
+        }else{
+          MSDE_Phi[i, 1] = MSDE
+          Phi_1_est[i,] = Phi_est[,j]
+          Theta_est[i,1] = Theta_save[[i]][j,j]
+        }
+      }
+    }
+  }
+}
+
+print(paste0("The mean MSDE for the unique components {", symbol("phi"), 
+             "(t)} ", "are:"))
+print(round(colMeans(MSDE_Phi, na.rm = TRUE), digits = 3))
+
+
+# Plots
+quantile_mat = matrix(nrow = K, ncol = 3)
+for(j.true in 1:K){
+  quantile_mat[j.true,] = sort(na.omit(MSDE_Phi)[,j.true])[
+    round(nrow(na.omit(MSDE_Phi)) * c(.05, .50, .95))] 
+}
+ind_mat = matrix(nrow = K, ncol = 3) 
+for(j.true in 1:K){
+  for (j in 1:3) {
+    ind_mat[j.true,j] = which.min(abs(MSDE_Phi[,j.true] - quantile_mat[j.true,j]))
+  }
+}
+
+## plot for phi_1(t)
+phi_1_5th = Phi_1_est[ind_mat[1,1],]
+phi_1_50th = Phi_1_est[ind_mat[1,2],]
+phi_1_95th = Phi_1_est[ind_mat[1,3],]
+
+par(mar = c(5.1, 5, 4.1, 2.1))
+matplot(tobs, cbind(Phi[,1], phi_1_5th, phi_1_50th, phi_1_95th), 
+        type = "l", lwd = 3, xlab = "Time", ylab = "", cex.lab = 1.9, 
+        cex.axis = 1.5, col=c("black", "red","black", "blue"), lty = c(1,2,3,4), 
+        mgp = c(2.5,1,0), , xaxs = "i")
+title(main = list("", cex = 2.5), adj = 0, line = 1.5)
+mtext(expression(hat(phi)[1]*(t)), side=2, line=1.9, cex=2)
+```
+
+
+$\gamma_r(t)$
+```{r}
+MSDE_Gamma = matrix(data = NA, nrow = length(Gamma_save), ncol = R)
+Gamma_1_est = matrix(data = NA, nrow = length(Gamma_save), ncol = N)
+Lambda_est = matrix(data = NA, nrow = length(Lambda_save), ncol = R)
+for (i in 1:length(Gamma_save)) {
+  Gamma_est = Gamma_save[[i]]
+  if(NCOL(Gamma_est) >= R){ 
+    if(NCOL(Gamma_est) == 1){ # R = R_est = 1.
+      MSDE_Gamma[i,1] = min(
+        trapz(tobs, (Gamma - Gamma_est)^2) / trapz(tobs, Gamma^2), 
+        trapz(tobs, (Gamma + Gamma_est)^2) / trapz(tobs, Gamma^2))
+      Gamma_1_est[i,] = Gamma_est
+      Lambda_est[i,1] = Lambda_save[[i]]
+    }else{ # R_est > R = 1
+      for (j in 1:NCOL(Gamma_est)) {
+        MSDE = min(trapz(tobs, (Gamma - Gamma_est[,j])^2) / 
+                     trapz(tobs, Gamma^2), 
+                 trapz(tobs, (Gamma + Gamma_est[,j])^2) / 
+                   trapz(tobs, Gamma^2))
+        if(j > 1){
+          if(MSDE < MSDE_Gamma[i, 1]){
+            MSDE_Gamma[i,1] = MSDE
+            Gamma_1_est[i,] = Gamma_est[,j]
+            Lambda_est[i,1] = Lambda_save[[i]][j,j]
+          }
+        }else{
+          MSDE_Gamma[i,1] = MSDE
+          Gamma_1_est[i,] = Gamma_est[,j]
+          Lambda_est[i,1] = Lambda_save[[i]][j,j]
+        }
+      }
+    }
+  }
+}
+
+print(paste0("The mean MSDE for the unique components {", symbol("gamma"), 
+             "(t)} ", "are:"))
+print(round(colMeans(MSDE_Gamma, na.rm = TRUE), digits = 3))
+
+
+# Plots
+quantile_mat = matrix(nrow = R, ncol = 3)
+for(j.true in 1:R){
+  quantile_mat[j.true,] = sort(na.omit(MSDE_Gamma)[,j.true])[
+    round(nrow(na.omit(MSDE_Gamma)) * c(.05, .50, .95))] 
+}
+
+ind_mat = matrix(nrow = R, ncol = 3)
+for(j.true in 1:R){
+  for (j in 1:3) {
+    ind_mat[j.true,j] = which.min(abs(MSDE_Gamma[,j.true] - quantile_mat[j.true,j]))
+  }
+}
+
+## plot for gamma_1(t)
+gamma_1_5th = Gamma_1_est[ind_mat[1,1],]
+gamma_1_50th = Gamma_1_est[ind_mat[1,2],]
+gamma_1_95th = Gamma_1_est[ind_mat[1,3],]
+
+par(mar = c(5.1, 5, 4.1, 2.1))
+matplot(tobs, cbind(Gamma[,1], gamma_1_5th, gamma_1_50th, gamma_1_95th), 
+        type = "l", lwd = 3, xlab = "Time", ylab = "", cex.lab = 1.9, 
+        cex.axis = 1.5, col=c("black", "red","black", "blue"), lty = c(1,2,3,4),
+        mgp = c(2.5,1,0), xaxs = "i")
+title(main = list("", cex = 2.5), adj = 0, line = 1.5)
+mtext(expression(hat(gamma)[1]*(t)), side=2, line=1.9, cex=2)
+```
+
+
+Calculate MSE of score variances
+
+```{r}
+scoreVar_MSE = matrix(data = NA, nrow = length(Omega_x_save), ncol = (2*L + K + R))
+for (i in 1:length(Omega_x_save)) {
+    scoreVar_MSE[i,1:L] = (diag(Omega_x) - Omega_x_est[i,])^2 / (diag(Omega_x))^2
+    scoreVar_MSE[i,(L+1):(L+L)] = (diag(Omega_y) - Omega_y_est[i,])^2 / (diag(Omega_y))^2
+    scoreVar_MSE[i,(2*L+1):(2*L+K)] = (diag(Theta) - Theta_est[i,])^2 / (diag(Theta))^2
+    scoreVar_MSE[i,(2*L+K+1):(2*L+K+R)] = (diag(Lambda) - Lambda_est[i,])^2 / (diag(Lambda))^2
+}
+
+print("Mean MSE for the following score variances are:")
+print(paste(symbol("omega") %p% supsc("x"), ":", 
+            round(colMeans(as.matrix(scoreVar_MSE[,1:L]), na.rm = TRUE), digits = 3)))
+print(paste(symbol("omega") %p% supsc("y"), ":", 
+            round(colMeans(as.matrix(scoreVar_MSE[,(L+1):(L+L)]), na.rm = TRUE), digits = 3)))
+print(paste(symbol("theta"), ":", 
+            round(colMeans(as.matrix(scoreVar_MSE[,(2*L+1):(2*L+K)]), na.rm = TRUE), digits = 3)))
+print(paste(symbol("lambda"), ":", 
+            round(colMeans(as.matrix(scoreVar_MSE[,(2*L+K+1):(2*L+K+R)]), na.rm = TRUE), digits = 3)))
+```
+
+
+*Outcome-level*
+
+$\tau^x_v(t)$
+```{r}
+MSDE_tau_x = matrix(data = NA, nrow = length(tau_x_save), ncol = V_x)
+tau_x_1_est = matrix(data = NA, nrow = length(tau_x_save), ncol = N)
+tau_x_2_est = matrix(data = NA, nrow = length(tau_x_save), ncol = N)
+varsigma_x_est = matrix(data = NA, nrow = length(varsigma_x_save), ncol = V_x)
+for (i in 1:length(tau_x_save)) {
+  tau_x_est = tau_x_save[[i]]
+  if(NCOL(tau_x_est) >= V_x){
+    min.ind = c()
+    for(j.true in 1:V_x){
+      MSDE = c()
+      for (j in 1:NCOL(tau_x_est)) {
+        MSDE = append(MSDE, min(
+          trapz(tobs, (tau_x[,j.true] - tau_x_est[,j])^2) / 
+            trapz(tobs, tau_x[,j.true]^2),
+          trapz(tobs, (tau_x[,j.true] + tau_x_est[,j])^2) / 
+            trapz(tobs, tau_x[,j.true]^2)))
+      }
+      min.ind = append(min.ind, which.min(MSDE))  
+      MSDE_tau_x[i, j.true] = min(MSDE)
+      varsigma_x_est[i,j.true] = varsigma_x_save[[i]][which.min(MSDE)]
+      if(j.true == 1){tau_x_1_est[i,] = tau_x_est[,which.min(MSDE)]}
+      if(j.true == 2){tau_x_2_est[i,] = tau_x_est[,which.min(MSDE)]}
+    }
+  }
+}
+
+print(paste0("The mean MSDE for the unique components {", symbol("tau_x"), 
+             "(t)} ", "are:"))
+print(round(colMeans(MSDE_tau_x, na.rm = TRUE), digits = 3))
+
+
+# Plots
+quantile_mat = matrix(nrow = V_x, ncol = 3)
+for(j.true in 1:V_x){
+  quantile_mat[j.true,] = sort(na.omit(MSDE_tau_x)[,j.true])[
+    round(nrow(na.omit(MSDE_tau_x)) * c(.05, .50, .95))] 
+}
+ind_mat = matrix(nrow = V_x, ncol = 3) 
+for(j.true in 1:V_x){
+  for (j in 1:3) {
+    ind_mat[j.true,j] = which.min(abs(MSDE_tau_x[,j.true] - quantile_mat[j.true,j]))
+  }
+}
+
+## plot for tau^x_1(t)
+tau_x_1_5th = tau_x_1_est[ind_mat[1,1],]
+tau_x_1_50th = tau_x_1_est[ind_mat[1,2],]
+tau_x_1_95th = tau_x_1_est[ind_mat[1,3],]
+
+par(mar = c(5.1, 5, 4.1, 2.1))
+matplot(tobs, cbind(tau_x[,1], tau_x_1_5th, tau_x_1_50th, tau_x_1_95th), 
+        type = "l", lwd = 3, xlab = "Time", ylab = "", cex.lab = 1.9, 
+        cex.axis = 1.5, col=c("black", "red","black", "blue"), lty = c(1,2,3,4), 
+        mgp = c(2.5,1,0), , xaxs = "i", ylim = c(-.25, 1.75))
+title(main = list("", cex = 2.5), adj = 0, line = 1.5)
+mtext(expression(hat(tau)[1]^{x}*(t)), side=2, line=1.9, cex=2)
+
+
+
+## plot for tau^x_2(t)
+tau_x_2_5th = tau_x_2_est[ind_mat[2,1],]
+tau_x_2_50th = tau_x_2_est[ind_mat[2,2],]
+tau_x_2_95th = tau_x_2_est[ind_mat[2,3],]
+
+par(mar = c(5.1, 5, 4.1, 2.1))
+matplot(tobs, cbind(tau_x[,2], tau_x_2_5th, tau_x_2_50th, tau_x_2_95th), 
+        type = "l", lwd = 3, xlab = "Time", ylab = "",  cex.lab = 1.9, 
+        cex.axis = 1.5, col=c("black", "red","black", "blue"), 
+        lty = c(1,2,3,4), mgp = c(2.5,1,0), , xaxs = "i")
+title(main = list("", cex = 2.5), adj = 0, line = 1.5)
+mtext(expression(hat(tau)[2]^{x}*(t)), side=2, line=1.9, cex=2)
+```
+
+
+$\tau^y_v(t)$
+```{r}
+MSDE_tau_y = matrix(data = NA, nrow = length(tau_y_save), ncol = V_y)
+tau_y_1_est = matrix(data = NA, nrow = length(tau_y_save), ncol = N)
+tau_y_2_est = matrix(data = NA, nrow = length(tau_y_save), ncol = N)
+tau_y_3_est = matrix(data = NA, nrow = length(tau_y_save), ncol = N)
+varsigma_y_est = matrix(data = NA, nrow = length(varsigma_y_save), ncol = V_y)
+for (i in 1:length(tau_y_save)) {
+  tau_y_est = tau_y_save[[i]]
+  if(NCOL(tau_y_est) >= V_y){
+    min.ind = c()
+    for(j.true in 1:V_y){
+      MSDE = c()
+      for (j in 1:NCOL(tau_y_est)) {
+        MSDE = append(MSDE, min(
+          trapz(tobs, (tau_y[,j.true] - tau_y_est[,j])^2) / 
+            trapz(tobs, tau_y[,j.true]^2),
+          trapz(tobs, (tau_y[,j.true] + tau_y_est[,j])^2) / 
+            trapz(tobs, tau_y[,j.true]^2)))
+      }
+      min.ind = append(min.ind, which.min(MSDE))  
+      MSDE_tau_y[i, j.true] = min(MSDE)
+      varsigma_y_est[i,j.true] = varsigma_y_save[[i]][which.min(MSDE)]
+      if(j.true == 1){tau_y_1_est[i,] = tau_y_est[,which.min(MSDE)]}
+      if(j.true == 2){tau_y_2_est[i,] = tau_y_est[,which.min(MSDE)]}
+      if(j.true == 3){tau_y_3_est[i,] = tau_y_est[,which.min(MSDE)]}
+    }
+  }
+}
+
+print(paste0("The mean MSDE for the unique components {", symbol("tau_y"), 
+             "(t)} ", "are:"))
+print(round(colMeans(MSDE_tau_y, na.rm = TRUE), digits = 3))
+
+
+# Plots
+quantile_mat = matrix(nrow = V_y, ncol = 3)
+for(j.true in 1:V_y){
+  quantile_mat[j.true,] = sort(na.omit(MSDE_tau_y)[,j.true])[
+    round(nrow(na.omit(MSDE_tau_y)) * c(.05, .50, .95))] 
+}
+ind_mat = matrix(nrow = V_y, ncol = 3)
+for(j.true in 1:V_y){
+  for (j in 1:3) {
+    ind_mat[j.true,j] = which.min(abs(MSDE_tau_y[,j.true] - quantile_mat[j.true,j]))
+  }
+}
+
+## plot for tau^y_1(t)
+tau_y_1_5th = tau_y_1_est[ind_mat[1,1],]
+tau_y_1_50th = tau_y_1_est[ind_mat[1,2],]
+tau_y_1_95th = tau_y_1_est[ind_mat[1,3],]
+
+par(mar = c(5.1, 5, 4.1, 2.1))
+matplot(tobs, cbind(tau_y[,1], tau_y_1_5th, tau_y_1_50th, tau_y_1_95th), 
+        type = "l", lwd = 3, xlab = "Time", ylab = "", cex.lab = 1.9, 
+        cex.axis = 1.5, col=c("black", "red","black", "blue"), lty = c(1,2,3,4), 
+        mgp = c(2.5,1,0), , xaxs = "i", ylim = c(-.25, 1.75))
+title(main = list("", cex = 2.5), adj = 0, line = 1.5)
+mtext(expression(hat(tau)[1]^{y}*(t)), side=2, line=1.9, cex=2)
+
+## plot for tau^y_2(t)
+tau_y_2_5th = tau_y_2_est[ind_mat[2,1],]
+tau_y_2_50th = tau_y_2_est[ind_mat[2,2],]
+tau_y_2_95th = tau_y_2_est[ind_mat[2,3],]
+
+par(mar = c(5.1, 5, 4.1, 2.1))
+matplot(tobs, cbind(tau_y[,2], tau_y_2_5th, tau_y_2_50th, tau_y_2_95th), 
+        type = "l", lwd = 3, xlab = "Time", ylab = "",  cex.lab = 1.9, 
+        cex.axis = 1.5, col=c("black", "red","black", "blue"), 
+        lty = c(1,2,3,4), mgp = c(2.5,1,0), , xaxs = "i")
+title(main = list("", cex = 2.5), adj = 0, line = 1.5)
+mtext(expression(hat(tau)[2]^{y}*(t)), side=2, line=1.9, cex=2)
+
+## plot for tau_y_3(t)
+tau_y_3_5th = tau_y_3_est[ind_mat[3,1],]
+tau_y_3_50th = tau_y_3_est[ind_mat[3,2],]
+tau_y_3_95th = tau_y_3_est[ind_mat[3,3],]
+
+par(mar = c(5.1, 5, 4.1, 2.1))
+matplot(tobs, cbind(tau_y[,3], tau_y_3_5th, tau_y_3_50th, tau_y_3_95th), 
+        type = "l", lwd = 3, xlab = "Time", ylab = "",  cex.lab = 1.9, 
+        cex.axis = 1.5, col=c("black", "red","black", "blue"), 
+        lty = c(1,2,3,4), mgp = c(2.5,1,0), , xaxs = "i")
+title(main = list("", cex = 2.5), adj = 0, line = 1.5)
+mtext(expression(hat(tau)[3]^{y}*(t)), side=2, line=1.9, cex=2)
+```
+
+
+Calculate MSE of score variances
+
+
+```{r}
+scoreVar_MSE = matrix(data = NA, nrow = length(varsigma_x_save), ncol = (V_x + V_y))
+for (i in 1:length(varsigma_x_save)) {
+    scoreVar_MSE[i,1:V_x] = (diag(varsigma_x) - varsigma_x_est[i,])^2 / (diag(varsigma_x))^2
+    scoreVar_MSE[i,(V_x+1):(V_x+V_y)] = (diag(varsigma_y) - varsigma_y_est[i,])^2 / (diag(varsigma_y))^2
+}
+
+print("Mean MSE for the following score variances are:")
+print(paste(symbol("varsigma") %p% supsc("x"), ":", 
+            round(colMeans(as.matrix(scoreVar_MSE[,1:V_x]), na.rm = TRUE), digits = 3)))
+print(paste(symbol("varsigma") %p% supsc("y"), ":", 
+            round(colMeans(as.matrix(scoreVar_MSE[,(V_x+1):(V_x+V_y)]), na.rm = TRUE),digits = 3)))
+```
+
+
+
+
+
+
+
+
+
+
